@@ -25,39 +25,55 @@ Clone the repo:
 ```bash
 git clone https://github.com/your-username/FactSphere-AI.git
 cd FactSphere-AI
+```
 
-**Create a virtual environment and activate it:**
+Create a virtual environment and activate it:
+
+```bash
 python -m venv venv
-*PowerShell:*
- .\venv\Scripts\Activate.ps1
-*CMD:*
- venv\Scripts\activate.bat
-*Mac/Linux:*
- source venv/bin/activate
+```
+**PowerShell:**
+```bash
+.\venv\Scripts\Activate.ps1
+```
+**CMD:**
+```bash
+venv\Scripts\activate.bat
+```
+**Mac/Linux:**
+```bash
+source venv/bin/activate
+```
 
-**Install dependencies:**
+Install dependencies:
+
+```bash
 pip install -r requirements.txt
+```
 
-**Usage**
-*Run the main program:*
- python main.py
+Run the main program:
 
+```bash
+python main.py
+```
 
-*Enter your query when prompted.*
+Enter your query when prompted.
 ---
+
 ## How it works
-**The agents will:
 
-*Plan the query
-*Search for results
-*Generate a summary
-*Evaluate the summary
-*Past queries are cached in memory to speed up repeated searches**
+**The agents will:**
 
+- Plan the query
+- Search for results
+- Generate a summary
+- Evaluate the summary
+- Past queries are cached in memory to speed up repeated searches**
 
 ---
 
 ## Project Structure
+```bash
 FactSphere-AI/
 ├─ agents/
 │  ├─ planner.py
@@ -72,7 +88,7 @@ FactSphere-AI/
 ├─ main.py
 ├─ requirements.txt
 └─ README.md
-
+```
 
 
 Built as part of the Kaggle 5-Day AI Agents Capstone Project.
