@@ -23,7 +23,7 @@ Think of it as a mini research team in code.
 Clone the repo:
 
 ```bash
-git clone https://github.com/your-username/FactSphere-AI.git
+git clone https://github.com/IqraShahid9/FactSphere-AI.git
 cd FactSphere-AI
 ```
 
