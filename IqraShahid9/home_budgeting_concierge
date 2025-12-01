@@ -1,0 +1,821 @@
+{
+  "nbformat": 4,
+  "nbformat_minor": 5,
+  "metadata": {
+    "colab": {
+      "provenance": [],
+      "include_colab_link": true
+    },
+    "kernelspec": {
+      "name": "python3",
+      "display_name": "Python 3"
+    }
+  },
+  "cells": [
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "view-in-github",
+        "colab_type": "text"
+      },
+      "source": [
+        "<a href=\"https://colab.research.google.com/github/IqraShahid9/FactSphere-AI/blob/main/IqraShahid9/home_budgeting_concierge\" target=\"_parent\"><img src=\"https://colab.research.google.com/assets/colab-badge.svg\" alt=\"Open In Colab\"/></a>"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "o_ZuzNBvMi44"
+      },
+      "source": [
+        "!mkdir -p project/agents project/tools project/memory project/core\n"
+      ],
+      "id": "o_ZuzNBvMi44",
+      "execution_count": 16,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "%%writefile sample_expenses.csv\n",
+        "date,description,amount\n",
+        "2025-02-01,Groceries,54.20\n",
+        "2025-02-02,Electric Bill,78.50\n",
+        "2025-02-03,Netflix Subscription,15.99\n",
+        "2025-02-04,Bus Pass,20.00\n",
+        "2025-02-05,Coffee,4.50\n",
+        "2025-02-06,Water Bill,32.10\n",
+        "2025-02-06,Restaurant,27.80\n",
+        "2025-02-07,Gas,41.00\n"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "QrpkGRrqOo9v",
+        "outputId": "193446bb-4625-47b1-c1ae-eb9f491f7eee"
+      },
+      "id": "QrpkGRrqOo9v",
+      "execution_count": 17,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Writing sample_expenses.csv\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "WrX0Ey74Mi45",
+        "outputId": "ef94bf9b-0edb-4077-9188-7c33891d0f1e"
+      },
+      "source": [
+        "%%writefile project/agents/planner.py\n",
+        "from typing import Dict, Any\n",
+        "import uuid\n",
+        "from project.core.a2a_protocol import Message\n",
+        "from project.core.observability import SimpleLogger\n",
+        "\n",
+        "class Planner:\n",
+        "    def __init__(self, memory=None, logger=None):\n",
+        "        self.memory = memory\n",
+        "        self.logger = logger or SimpleLogger('project/project_log.json')\n",
+        "\n",
+        "    def _new_task_id(self) -> str:\n",
+        "        return str(uuid.uuid4())\n",
+        "\n",
+        "    def plan(self, user_input: str) -> Dict[str, Any]:\n",
+        "        intent = 'summarize'\n",
+        "        ui = user_input.lower()\n",
+        "        if any(w in ui for w in ['forecast','predict','upcoming','next']):\n",
+        "            intent = 'forecast'\n",
+        "        if any(w in ui for w in ['categor','category','categorize']):\n",
+        "            intent = 'categorize'\n",
+        "        if any(w in ui for w in ['budget','save','saving','recommend']):\n",
+        "            intent = 'recommend'\n",
+        "        task_id = self._new_task_id()\n",
+        "        plan = {\n",
+        "            'task_id': task_id,\n",
+        "            'intent': intent,\n",
+        "            'user_input': user_input,\n",
+        "            'steps': []\n",
+        "        }\n",
+        "        if intent == 'categorize':\n",
+        "            plan['steps'].append({'worker': 'categorizer', 'action': 'categorize'})\n",
+        "        elif intent == 'forecast':\n",
+        "            plan['steps'].append({'worker': 'categorizer', 'action': 'categorize'})\n",
+        "            plan['steps'].append({'worker': 'forecast', 'action': 'forecast'})\n",
+        "        elif intent == 'recommend':\n",
+        "            plan['steps'].append({'worker': 'categorizer', 'action': 'categorize'})\n",
+        "            plan['steps'].append({'worker': 'summary', 'action': 'summarize'})\n",
+        "            plan['steps'].append({'worker': 'forecast', 'action': 'forecast'})\n",
+        "        else:\n",
+        "            plan['steps'].append({'worker': 'categorizer', 'action': 'categorize'})\n",
+        "            plan['steps'].append({'worker': 'summary', 'action': 'summarize'})\n",
+        "\n",
+        "        message = Message(\n",
+        "            sender='planner',\n",
+        "            receiver='workers',\n",
+        "            task_id=task_id,\n",
+        "            intent=plan['intent'],\n",
+        "            payload={'plan': plan},\n",
+        "            requires_memory=True,\n",
+        "            memory_keys=['uploaded_rows','recurring_bills','budget_goals']\n",
+        "        )\n",
+        "        self.logger.log({'agent': 'planner', 'action': 'plan_created', 'plan': plan})\n",
+        "        return message.to_dict()\n",
+        "\n",
+        "if __name__ == '__main__':\n",
+        "    p = Planner()\n",
+        "    print(p.plan('Summarize my last month'))\n",
+        "\n"
+      ],
+      "id": "WrX0Ey74Mi45",
+      "execution_count": 18,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Overwriting project/agents/planner.py\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "JZoyzke6Mi46",
+        "outputId": "4de31c57-68c6-4197-89d1-d060ef102871"
+      },
+      "source": [
+        "%%writefile project/agents/worker.py\n",
+        "from typing import Dict, Any, List\n",
+        "from project.tools.tools import (\n",
+        "    parse_csv_rows,\n",
+        "    categorize_transactions,\n",
+        "    build_monthly_summary,\n",
+        "    forecast_recurring_bills\n",
+        ")\n",
+        "from project.core.observability import SimpleLogger\n",
+        "\n",
+        "class ExpenseCategorizer:\n",
+        "    def __init__(self, memory=None, logger=None):\n",
+        "        self.memory = memory\n",
+        "        self.logger = logger or SimpleLogger('project/project_log.json')\n",
+        "\n",
+        "    def run(self, payload: Dict[str, Any]) -> Dict[str, Any]:\n",
+        "        rows = payload.get('rows') or []\n",
+        "        categories = categorize_transactions(rows)\n",
+        "        self.logger.log({'agent': 'categorizer', 'count': len(categories)})\n",
+        "        return {'categories': categories}\n",
+        "\n",
+        "class MonthlySummaryBuilder:\n",
+        "    def __init__(self, memory=None, logger=None):\n",
+        "        self.memory = memory\n",
+        "        self.logger = logger or SimpleLogger('project/project_log.json')\n",
+        "\n",
+        "    def run(self, payload: Dict[str, Any]) -> Dict[str, Any]:\n",
+        "        categories = payload.get('categories') or []\n",
+        "        summary = build_monthly_summary(categories)\n",
+        "        self.logger.log({'agent': 'summary_builder', 'totals': summary.get('totals',{})})\n",
+        "        return summary\n",
+        "\n",
+        "class ForecastGenerator:\n",
+        "    def __init__(self, memory=None, logger=None):\n",
+        "        self.memory = memory\n",
+        "        self.logger = logger or SimpleLogger('project/project_log.json')\n",
+        "\n",
+        "    def run(self, payload: Dict[str, Any]) -> Dict[str, Any]:\n",
+        "        categories = payload.get('categories') or []\n",
+        "        forecast = forecast_recurring_bills(categories)\n",
+        "        self.logger.log({'agent': 'forecast_generator', 'forecast_items': len(forecast)})\n",
+        "        return {'forecast': forecast}\n",
+        "\n",
+        "class WorkerHub:\n",
+        "    def __init__(self, memory=None, logger=None):\n",
+        "        self.categorizer = ExpenseCategorizer(memory, logger)\n",
+        "        self.summary_builder = MonthlySummaryBuilder(memory, logger)\n",
+        "        self.forecast_generator = ForecastGenerator(memory, logger)\n",
+        "\n",
+        "    def handle(self, message: Dict[str, Any]) -> Dict[str, Any]:\n",
+        "        plan = message.get('payload', {}).get('plan', {})\n",
+        "        steps = plan.get('steps', [])\n",
+        "        intermediate = {}\n",
+        "        # Attach provided data rows if any\n",
+        "        data = message.get('payload', {}).get('data', {})\n",
+        "        rows = data.get('rows', [])\n",
+        "        for step in steps:\n",
+        "            worker = step.get('worker')\n",
+        "            action = step.get('action')\n",
+        "            if worker == 'categorizer':\n",
+        "                res = self.categorizer.run({'rows': rows})\n",
+        "                intermediate.update(res)\n",
+        "            elif worker == 'summary':\n",
+        "                res = self.summary_builder.run({'categories': intermediate.get('categories', [])})\n",
+        "                intermediate.update(res)\n",
+        "            elif worker == 'forecast':\n",
+        "                res = self.forecast_generator.run({'categories': intermediate.get('categories', [])})\n",
+        "                intermediate.update(res)\n",
+        "        return intermediate\n",
+        "\n",
+        "if __name__ == '__main__':\n",
+        "    print('Worker module loaded')\n",
+        "\n"
+      ],
+      "id": "JZoyzke6Mi46",
+      "execution_count": 19,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Overwriting project/agents/worker.py\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "3bJslwteMi46",
+        "outputId": "302395b4-4a76-4712-86e9-cce75d311101"
+      },
+      "source": [
+        "%%writefile project/agents/evaluator.py\n",
+        "from typing import Dict, Any\n",
+        "from project.core.observability import SimpleLogger\n",
+        "\n",
+        "class Evaluator:\n",
+        "    def __init__(self, memory=None, logger=None):\n",
+        "        self.memory = memory\n",
+        "        self.logger = logger or SimpleLogger('project/project_log.json')\n",
+        "\n",
+        "    def validate(self, plan: Dict[str, Any], results: Dict[str, Any]) -> Dict[str, Any]:\n",
+        "        issues = []\n",
+        "        if 'categories' not in results:\n",
+        "            issues.append('Missing categories in results')\n",
+        "        if any(s.get('action')=='forecast' for s in plan.get('steps',[])) and 'forecast' not in results:\n",
+        "            issues.append('Forecast requested but missing')\n",
+        "        # Basic math check\n",
+        "        totals = results.get('totals')\n",
+        "        if totals:\n",
+        "            overall = sum(totals.values())\n",
+        "            if abs(overall - results.get('overall', overall)) > 1e-6:\n",
+        "                issues.append('Totals mismatch')\n",
+        "        valid = len(issues) == 0\n",
+        "        verdict = {'valid': valid, 'issues': issues, 'results': results}\n",
+        "        self.logger.log({'agent': 'evaluator', 'verdict': verdict})\n",
+        "        return verdict\n",
+        "\n",
+        "if __name__ == '__main__':\n",
+        "    e = Evaluator()\n",
+        "    print(e.validate({'steps':[]},{'categories':[], 'totals':{}, 'overall':0}))\n",
+        "\n"
+      ],
+      "id": "3bJslwteMi46",
+      "execution_count": 20,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Overwriting project/agents/evaluator.py\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "eFjQVrP1Mi46",
+        "outputId": "f0dee82d-04d0-4759-9dd0-364e67a8ebe3"
+      },
+      "source": [
+        "%%writefile project/tools/tools.py\n",
+        "from typing import List, Dict, Any\n",
+        "import csv\n",
+        "\n",
+        "DEFAULT_CATEGORY_RULES = {\n",
+        "    'grocery': ['walmart', 'whole foods', 'costco', 'aldi', 'kroger'],\n",
+        "    'utilities': ['utility', 'electric', 'gas', 'water', 'electricity'],\n",
+        "    'subscription': ['netflix', 'spotify', 'amazon prime', 'hbo', 'disney'],\n",
+        "    'transport': ['uber', 'lyft', 'taxi', 'metro', 'train'],\n",
+        "    'dining': ['restaurant', 'cafe', 'starbucks', 'mcdonald']\n",
+        "}\n",
+        "\n",
+        "def parse_csv_rows(csv_text: str) -> List[Dict[str,Any]]:\n",
+        "    rows = []\n",
+        "    try:\n",
+        "        reader = csv.DictReader(csv_text.splitlines())\n",
+        "        for r in reader:\n",
+        "            rows.append(r)\n",
+        "    except Exception:\n",
+        "        with open(csv_text, 'r', encoding='utf-8') as f:\n",
+        "            reader = csv.DictReader(f)\n",
+        "            for r in reader:\n",
+        "                rows.append(r)\n",
+        "    return rows\n",
+        "\n",
+        "def categorize_transactions(rows: List[Dict[str,Any]], rules: Dict[str,List[str]]=DEFAULT_CATEGORY_RULES) -> List[Dict[str,Any]]:\n",
+        "    categorized = []\n",
+        "    for r in rows:\n",
+        "        desc = (r.get('description') or r.get('merchant') or r.get('payee') or '').lower()\n",
+        "        try:\n",
+        "            amount = float(r.get('amount') or r.get('amt') or r.get('value') or 0)\n",
+        "        except Exception:\n",
+        "            amount = 0.0\n",
+        "        cat = 'other'\n",
+        "        for k, kws in rules.items():\n",
+        "            for kw in kws:\n",
+        "                if kw in desc:\n",
+        "                    cat = k\n",
+        "                    break\n",
+        "            if cat != 'other' and cat in rules:\n",
+        "                break\n",
+        "        categorized.append({'description': desc, 'amount': amount, 'category': cat, 'raw': r})\n",
+        "    return categorized\n",
+        "\n",
+        "def build_monthly_summary(categories: List[Dict[str,Any]]) -> Dict[str,Any]:\n",
+        "    totals = {}\n",
+        "    for it in categories:\n",
+        "        c = it.get('category','other')\n",
+        "        totals[c] = totals.get(c, 0.0) + float(it.get('amount', 0.0))\n",
+        "    overall = sum(totals.values())\n",
+        "    return {'totals': totals, 'overall': overall}\n",
+        "\n",
+        "def forecast_recurring_bills(categories: List[Dict[str,Any]]) -> List[Dict[str,Any]]:\n",
+        "    recurring = {}\n",
+        "    for it in categories:\n",
+        "        desc = it.get('description','')\n",
+        "        amt = it.get('amount',0.0)\n",
+        "        key = desc.strip()\n",
+        "        rec = recurring.get(key, {'amounts': []})\n",
+        "        rec['amounts'].append(amt)\n",
+        "        recurring[key] = rec\n",
+        "    out = []\n",
+        "    for k,v in recurring.items():\n",
+        "        avg = sum(v['amounts'])/len(v['amounts']) if v['amounts'] else 0.0\n",
+        "        out.append({'description': k, 'expected_amount': round(avg, 2)})\n",
+        "    return out\n",
+        "\n",
+        "if __name__ == '__main__':\n",
+        "    print('Tools ready')\n",
+        "\n"
+      ],
+      "id": "eFjQVrP1Mi46",
+      "execution_count": 21,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Overwriting project/tools/tools.py\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "5bJou11OMi46",
+        "outputId": "a6534e31-4631-45f8-918a-59c04f24ed02"
+      },
+      "source": [
+        "%%writefile project/memory/session_memory.py\n",
+        "import time\n",
+        "from typing import Any, Dict\n",
+        "\n",
+        "class SessionMemory:\n",
+        "    def __init__(self):\n",
+        "        self._store = {}\n",
+        "\n",
+        "    def set(self, key: str, value: Any) -> None:\n",
+        "        self._store[key] = {'value': value, 'ts': time.time()}\n",
+        "\n",
+        "    def get(self, key: str, default=None):\n",
+        "        item = self._store.get(key)\n",
+        "        if not item:\n",
+        "            return default\n",
+        "        return item.get('value')\n",
+        "\n",
+        "    def clear(self):\n",
+        "        self._store = {}\n",
+        "\n",
+        "    def dump(self):\n",
+        "        return {k:v['value'] for k,v in self._store.items()}\n",
+        "\n",
+        "if __name__ == '__main__':\n",
+        "    m = SessionMemory()\n",
+        "    m.set('a',1)\n",
+        "    print(m.get('a'))\n",
+        "\n"
+      ],
+      "id": "5bJou11OMi46",
+      "execution_count": 22,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Overwriting project/memory/session_memory.py\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "nV3nfLpcMi46",
+        "outputId": "0eee3bb1-e9cb-4996-a168-899769aad9e8"
+      },
+      "source": [
+        "%%writefile project/core/context_engineering.py\n",
+        "PLANNER_PROMPT = \"\"\"\n",
+        "You are the Planner agent. Parse user intent into a structured JSON plan and do not execute tasks.\n",
+        "Return a dict with keys: task_id, intent, steps.\n",
+        "\"\"\"\n",
+        "\n",
+        "WORKER_PROMPT = \"\"\"\n",
+        "You are a Worker. Execute the provided step and return machine-readable output.\n",
+        "\"\"\"\n",
+        "\n",
+        "EVALUATOR_PROMPT = \"\"\"\n",
+        "You are the Evaluator. Validate worker outputs and return a verdict with fields: valid (bool) and issues (list).\n",
+        "\"\"\"\n",
+        "\n",
+        "def get_planner_context():\n",
+        "    return PLANNER_PROMPT\n",
+        "\n",
+        "def get_worker_context():\n",
+        "    return WORKER_PROMPT\n",
+        "\n",
+        "def get_evaluator_context():\n",
+        "    return EVALUATOR_PROMPT\n",
+        "\n",
+        "if __name__ == '__main__':\n",
+        "    print(get_planner_context())\n",
+        "\n"
+      ],
+      "id": "nV3nfLpcMi46",
+      "execution_count": 23,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Overwriting project/core/context_engineering.py\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "_32jcOmaMi47",
+        "outputId": "29a3e051-8991-4271-d953-c547fe61be99"
+      },
+      "source": [
+        "%%writefile project/core/observability.py\n",
+        "import json\n",
+        "import time\n",
+        "from typing import Dict, Any\n",
+        "\n",
+        "class SimpleLogger:\n",
+        "    def __init__(self, path='project/project_log.json'):\n",
+        "        self.path = path\n",
+        "        try:\n",
+        "            with open(self.path, 'r') as f:\n",
+        "                pass\n",
+        "        except Exception:\n",
+        "            with open(self.path, 'w') as f:\n",
+        "                json.dump([], f)\n",
+        "\n",
+        "    def log(self, entry: Dict[str, Any]) -> None:\n",
+        "        record = {'ts': time.time(), **entry}\n",
+        "        try:\n",
+        "            with open(self.path, 'r') as f:\n",
+        "                data = json.load(f)\n",
+        "        except Exception:\n",
+        "            data = []\n",
+        "        data.append(record)\n",
+        "        with open(self.path, 'w') as f:\n",
+        "            json.dump(data, f, indent=2)\n",
+        "\n",
+        "if __name__ == '__main__':\n",
+        "    logger = SimpleLogger()\n",
+        "    logger.log({'agent':'test','action':'ping'})\n",
+        "\n"
+      ],
+      "id": "_32jcOmaMi47",
+      "execution_count": 24,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Overwriting project/core/observability.py\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "LqhSUf0KMi47",
+        "outputId": "38f485dc-35d2-4202-a7ef-dab7914ed090"
+      },
+      "source": [
+        "%%writefile project/core/a2a_protocol.py\n",
+        "from dataclasses import dataclass, asdict\n",
+        "from typing import Any, Dict, List\n",
+        "\n",
+        "@dataclass\n",
+        "class Message:\n",
+        "    sender: str\n",
+        "    receiver: str\n",
+        "    task_id: str\n",
+        "    intent: str\n",
+        "    payload: Dict[str, Any]\n",
+        "    requires_memory: bool = False\n",
+        "    memory_keys: List[str] = None\n",
+        "    metadata: Dict[str,Any] = None\n",
+        "\n",
+        "    def to_dict(self):\n",
+        "        return asdict(self)\n",
+        "\n",
+        "if __name__ == '__main__':\n",
+        "    m = Message('planner','workers','tid','summarize',{'plan':{}})\n",
+        "    print(m.to_dict())\n",
+        "\n"
+      ],
+      "id": "LqhSUf0KMi47",
+      "execution_count": 25,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Overwriting project/core/a2a_protocol.py\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "vAE4CQ-yMi47",
+        "outputId": "3b29d67d-e231-4f10-e620-372e5cf7d08c"
+      },
+      "source": [
+        "%%writefile project/main_agent.py\n",
+        "from typing import Dict, Any\n",
+        "from project.agents.planner import Planner\n",
+        "from project.agents.worker import WorkerHub\n",
+        "from project.agents.evaluator import Evaluator\n",
+        "from project.memory.session_memory import SessionMemory\n",
+        "from project.core.observability import SimpleLogger\n",
+        "\n",
+        "class MainAgent:\n",
+        "    def __init__(self):\n",
+        "        self.memory = SessionMemory()\n",
+        "        self.logger = SimpleLogger('project/project_log.json')\n",
+        "        self.planner = Planner(memory=self.memory, logger=self.logger)\n",
+        "        self.worker_hub = WorkerHub(memory=self.memory, logger=self.logger)\n",
+        "        self.evaluator = Evaluator(memory=self.memory, logger=self.logger)\n",
+        "\n",
+        "    def handle_message(self, user_input: str) -> Dict[str, Any]:\n",
+        "        plan_msg = self.planner.plan(user_input)\n",
+        "        data = {}\n",
+        "        rows = self.memory.get('uploaded_rows', [])\n",
+        "        data['rows'] = rows\n",
+        "        plan_msg['payload']['data'] = data\n",
+        "        worker_results = self.worker_hub.handle(plan_msg)\n",
+        "        # Merge summary if missing overall\n",
+        "        if 'totals' in worker_results and 'overall' not in worker_results:\n",
+        "            worker_results['overall'] = sum(worker_results['totals'].values())\n",
+        "        verdict = self.evaluator.validate(plan_msg.get('payload',{}).get('plan',{}), worker_results)\n",
+        "        if not verdict.get('valid'):\n",
+        "            response = {'status':'error', 'issues': verdict.get('issues')}\n",
+        "        else:\n",
+        "            response = {'status':'ok', 'response': worker_results}\n",
+        "        self.logger.log({'agent':'main','user_input': user_input, 'outcome': response})\n",
+        "        return {'response': response}\n",
+        "\n",
+        "def run_agent(user_input: str):\n",
+        "    agent = MainAgent()\n",
+        "    result = agent.handle_message(user_input)\n",
+        "    return result[\"response\"]\n",
+        "\n",
+        "if __name__ == '__main__':\n",
+        "    print(run_agent('Hello from main'))\n",
+        "\n"
+      ],
+      "id": "vAE4CQ-yMi47",
+      "execution_count": 26,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Overwriting project/main_agent.py\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "e19QROpOMi47",
+        "outputId": "933e7917-9291-4cf7-bf99-b87d0e7f5f3b"
+      },
+      "source": [
+        "%%writefile project/app.py\n",
+        "from project.main_agent import run_agent\n",
+        "from project.memory.session_memory import SessionMemory\n",
+        "from project.tools.tools import parse_csv_rows\n",
+        "import gradio as gr\n",
+        "\n",
+        "memory = SessionMemory()\n",
+        "\n",
+        "def upload_csv(content):\n",
+        "    rows = parse_csv_rows(content)\n",
+        "    memory.set('uploaded_rows', rows)\n",
+        "    return f'Uploaded {len(rows)} rows'\n",
+        "\n",
+        "def user_query(text):\n",
+        "    # For demo: MainAgent creates new memory; to persist across runs, write rows to file or use global memory\n",
+        "    # We'll write rows to a small JSON file the MainAgent could read if needed (not implemented here).\n",
+        "    return run_agent(text)\n",
+        "\n",
+        "with gr.Blocks() as demo:\n",
+        "    gr.Markdown('# Home Budgeting & Bill Concierge')\n",
+        "    csv_in = gr.Textbox(lines=6, label='Paste CSV (header: description,amount)')\n",
+        "    upload_btn = gr.Button('Upload CSV')\n",
+        "    upload_out = gr.Textbox(label='Upload result')\n",
+        "    query = gr.Textbox(label='Ask the agent')\n",
+        "    query_btn = gr.Button('Run')\n",
+        "    query_out = gr.Textbox(label='Agent output')\n",
+        "\n",
+        "    upload_btn.click(fn=upload_csv, inputs=[csv_in], outputs=[upload_out])\n",
+        "    query_btn.click(fn=lambda t: run_agent(t), inputs=[query], outputs=[query_out])\n",
+        "\n",
+        "if __name__ == '__main__':\n",
+        "    demo.launch()\n",
+        "\n"
+      ],
+      "id": "e19QROpOMi47",
+      "execution_count": 27,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Overwriting project/app.py\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "_hn5HYS-Mi47",
+        "outputId": "e620b73f-a239-4052-ebe4-653fcd499672"
+      },
+      "source": [
+        "%%writefile project/run_demo.py\n",
+        "import sys, os\n",
+        "sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), \"..\")))\n",
+        "from project.main_agent import run_agent\n",
+        "if __name__ == \"__main__\":\n",
+        "    print(run_agent(\"Hello! This is a demo.\"))\n",
+        "\n"
+      ],
+      "id": "_hn5HYS-Mi47",
+      "execution_count": 28,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Overwriting project/run_demo.py\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "ZtAsFhM2Mi47",
+        "outputId": "35184133-845f-4db4-8b1d-22dfbab15eab"
+      },
+      "source": [
+        "%%writefile project/requirements.txt\n",
+        "gradio\n",
+        "pandas\n",
+        "\n"
+      ],
+      "id": "ZtAsFhM2Mi47",
+      "execution_count": 29,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Overwriting project/requirements.txt\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "D-I-YfTYMi47",
+        "outputId": "84149d77-55cd-411b-8f77-8481f90e8d46"
+      },
+      "source": [
+        "from project.main_agent import run_agent\n",
+        "print(run_agent(\"what are my expenses for this month\"))\n"
+      ],
+      "id": "D-I-YfTYMi47",
+      "execution_count": 32,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "{'status': 'ok', 'response': {'categories': [], 'totals': {}, 'overall': 0}}\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "EvRDk2qTMi47",
+        "outputId": "3765d95f-69a7-4c04-c041-66cb6b238a15"
+      },
+      "source": [
+        "!zip -r project.zip project > /dev/null\n",
+        "print('project.zip created')\n"
+      ],
+      "id": "EvRDk2qTMi47",
+      "execution_count": 31,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "project.zip created\n"
+          ]
+        }
+      ]
+    }
+  ]
+}
